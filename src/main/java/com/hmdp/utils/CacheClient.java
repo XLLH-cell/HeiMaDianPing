@@ -2,6 +2,7 @@ package com.hmdp.utils;
 
 import ch.qos.logback.core.util.TimeUtil;
 import cn.hutool.core.bean.BeanUtil;
+import cn.hutool.core.util.BooleanUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
@@ -12,6 +13,8 @@ import org.springframework.stereotype.Component;
 
 import javax.annotation.Resource;
 import java.time.LocalDateTime;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
@@ -67,10 +70,23 @@ public class CacheClient {
         this.set(key,r,time ,unit);
         return r;
     }
-    public Shop queryWithLogicalExpire(Long id){
+
+    private boolean tryLock(String key){
+        Boolean flag=stringRedisTemplate.opsForValue().setIfAbsent(key,"1",10,TimeUnit.SECONDS);
+        return BooleanUtil.isTrue(flag);
+    }
+    private void unlock(String key){
+        stringRedisTemplate.delete(key);
+    }
+
+    //线程池
+    private static final ExecutorService CACHE_REBUILD_EXECUTOR = Executors.newFixedThreadPool(10);
+
+    public <R> R queryWithLogicalExpire(String keyPrefix,Long id,Class<R>type ){
         //1.从Redis查询(这里保存为字符串，演示字符串如何保存/查询)
-        String shopJson = stringRedisTemplate.opsForValue().get(CACHE_SHOP_KEY+id);
-        if(StrUtil.isBlank(shopJson)){//未命中，返回null。（默认命中，因为热点key都是预存的。）
+        String key = keyPrefix+id;
+        String json = stringRedisTemplate.opsForValue().get(key);
+        if(StrUtil.isBlank(json)){//未命中，返回null。（默认命中，因为热点key都是预存的。）
             return null;
         }
         //命中，判断过期时间

@@ -133,42 +133,42 @@ public class ShopServiceImpl extends ServiceImpl<ShopMapper, Shop> implements IS
     }
 
     //线程池
-    private static final ExecutorService CACHE_REBUILD_EXECUTOR = Executors.newFixedThreadPool(10);
+//    private static final ExecutorService CACHE_REBUILD_EXECUTOR = Executors.newFixedThreadPool(10);
 
-    public Shop queryWithLogicalExpire(Long id){
-        //1.从Redis查询(这里保存为字符串，演示字符串如何保存/查询)
-        String shopJson = stringRedisTemplate.opsForValue().get(CACHE_SHOP_KEY+id);
-        if(StrUtil.isBlank(shopJson)){//未命中，返回null。（默认命中，因为热点key都是预存的。）
-            return null;
-        }
-        //命中，判断过期时间
-        RedisData redisData = JSONUtil.toBean(shopJson,RedisData.class);
-        Shop shop = JSONUtil.toBean((JSONObject) redisData.getData(),Shop.class);
-        LocalDateTime expireTime = redisData.getExpireTime();
-        if(expireTime.isAfter(LocalDateTime.now())){
-            return shop;
-        }
-        //获取锁
-        String lockKey = LOCK_SHOP_KEY + id;
-        boolean isLock = tryLock(lockKey);
-        //获取成功
-        if(isLock){
-            //成功，开启独立线程重建缓存（就是更新）。
-            CACHE_REBUILD_EXECUTOR.submit(()->{
-                try {
-                    this.saveShop2Redis(id, 20L);
-                }catch (Exception e){
-                    throw new RuntimeException(e);
-                }finally {
-                    unlock(lockKey);
-                }
-            });
-            //释放锁
-        }
-
-        //失败就返回shop，成功也在此返回。
-        return shop;
-    }
+//    public Shop queryWithLogicalExpire(Long id){
+//        //1.从Redis查询(这里保存为字符串，演示字符串如何保存/查询)
+//        String shopJson = stringRedisTemplate.opsForValue().get(CACHE_SHOP_KEY+id);
+//        if(StrUtil.isBlank(shopJson)){//未命中，返回null。（默认命中，因为热点key都是预存的。）
+//            return null;
+//        }
+//        //命中，判断过期时间
+//        RedisData redisData = JSONUtil.toBean(shopJson,RedisData.class);
+//        Shop shop = JSONUtil.toBean((JSONObject) redisData.getData(),Shop.class);
+//        LocalDateTime expireTime = redisData.getExpireTime();
+//        if(expireTime.isAfter(LocalDateTime.now())){
+//            return shop;
+//        }
+//        //获取锁
+//        String lockKey = LOCK_SHOP_KEY + id;
+//        boolean isLock = tryLock(lockKey);
+//        //获取成功
+//        if(isLock){
+//            //成功，开启独立线程重建缓存（就是更新）。
+//            CACHE_REBUILD_EXECUTOR.submit(()->{
+//                try {
+//                    this.saveShop2Redis(id, 20L);
+//                }catch (Exception e){
+//                    throw new RuntimeException(e);
+//                }finally {
+//                    unlock(lockKey);
+//                }
+//            });
+//            //释放锁
+//        }
+//
+//        //失败就返回shop，成功也在此返回。
+//        return shop;
+//    }
 
 
     /**
